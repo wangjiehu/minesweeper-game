@@ -1,0 +1,139 @@
+:root {
+  --bg-color: #f8f9fa;
+  --card-bg: #ffffff;
+  --text-primary: #333333;
+  --text-secondary: #666666;
+  --accent-color: #4a90e2;
+  --accent-light: #e6f0ff;
+  --error-color: #e74c3c;
+  --revealed-bg: #e9ecef;
+  --hidden-bg: #dee2e6;
+  --border-color: #ced4da;
+  --radius-soft: 12px;
+
+  /* Number Colors */
+  --num-1: #1976d2;
+  --num-2: #388e3c;
+  --num-3: #d32f2f;
+  --num-4: #7b1fa2;
+  --num-5: #ff8f00;
+  --num-6: #0097a7;
+  --num-7: #424242;
+  --num-8: #bdbdbd;
+}
+
+body.dark-mode {
+  --bg-color: #121212;
+  --card-bg: #1e1e1e;
+  --text-primary: #e0e0e0;
+  --text-secondary: #aaaaaa;
+  --accent-color: #64b5f6;
+  --accent-light: #1a237e;
+  --revealed-bg: #2c2c2c;
+  --hidden-bg: #383838;
+  --border-color: #444444;
+}
+
+.minesweeper-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 20px;
+  min-height: 100vh;
+  background-color: var(--bg-color);
+  color: var(--text-primary);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+.header {
+  text-align: center;
+  margin-bottom: 25px;
+}
+
+.header h1 {
+  margin: 0;
+  font-size: 2.2rem;
+  color: var(--accent-color);
+  letter-spacing: 2px;
+}
+
+.signature {
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  font-weight: bold;
+  letter-spacing: 6px;
+  margin-top: 2px;
+}
+
+.game-controls {
+  display: flex;
+  gap: 15px;
+  margin-bottom: 20px;
+}
+
+.control-btn {
+  padding: 10px 20px;
+  border: none;
+  border-radius: var(--radius-soft);
+  background-color: var(--accent-light);
+  color: var(--accent-color);
+  font-weight: bold;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.control-btn:hover {
+  filter: brightness(0.9);
+}
+
+.game-info {
+  display: flex;
+  gap: 30px;
+  margin-bottom: 20px;
+  font-size: 1.2rem;
+  font-weight: bold;
+}
+
+.board {
+  display: grid;
+  border: 4px solid var(--border-color);
+  border-radius: 8px;
+  background-color: var(--border-color);
+  gap: 1px;
+  user-select: none;
+}
+
+.cell {
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+  cursor: pointer;
+  background-color: var(--hidden-bg);
+  transition: background-color 0.1s;
+}
+
+.cell.revealed {
+  background-color: var(--revealed-bg);
+  cursor: default;
+}
+
+.cell.mine {
+  background-color: var(--error-color);
+}
+
+.cell.flagged::after {
+  content: '🚩';
+  font-size: 1rem;
+}
+
+.cell-1 { color: var(--num-1); }
+.cell-2 { color: var(--num-2); }
+.cell-3 { color: var(--num-3); }
+.cell-4 { color: var(--num-4); }
+.cell-5 { color: var(--num-5); }
+.cell-6 { color: var(--num-6); }
+.cell-7 { color: var(--num-7); }
+.cell-8 { color: var(--num-8); }
