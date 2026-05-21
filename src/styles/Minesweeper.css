@@ -5,11 +5,17 @@
   --text-secondary: #666666;
   --accent-color: #4a90e2;
   --accent-light: #e6f0ff;
-  --error-color: #e74c3c;
+  --error-color: #ffab91; /* Light Orange-Red as requested */
+  
   --revealed-bg: #e9ecef;
   --hidden-bg: #dee2e6;
   --border-color: #ced4da;
+  --border-thick: #adb5bd;
   --radius-soft: 12px;
+
+  /* Button Colors from Sudoku */
+  --btn-brown: #efebe9;   
+  --btn-brown-dark: #d7ccc8; 
 
   /* Number Colors */
   --num-1: #1976d2;
@@ -29,9 +35,32 @@ body.dark-mode {
   --text-secondary: #aaaaaa;
   --accent-color: #64b5f6;
   --accent-light: #1a237e;
+  
   --revealed-bg: #2c2c2c;
-  --hidden-bg: #383838;
-  --border-color: #444444;
+  --hidden-bg: #424242;
+  --border-color: #333333;
+  --border-thick: #555555;
+
+  --btn-brown: #3e2723;
+  --btn-brown-dark: #2d1d1a;
+}
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+  background-color: var(--bg-color);
+  color: var(--text-primary);
+  -webkit-tap-highlight-color: transparent;
+  transition: background-color 0.2s, color 0.2s;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+button {
+  -webkit-tap-highlight-color: transparent;
+  outline: none !important;
 }
 
 .minesweeper-container {
@@ -40,11 +69,10 @@ body.dark-mode {
   align-items: center;
   padding: 20px;
   min-height: 100vh;
-  background-color: var(--bg-color);
-  color: var(--text-primary);
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  box-sizing: border-box;
 }
 
+/* Header & Signature */
 .header {
   text-align: center;
   margin-bottom: 25px;
@@ -65,70 +93,320 @@ body.dark-mode {
   margin-top: 2px;
 }
 
-.game-controls {
+.dark-mode-toggle {
+  position: absolute;
+  right: -100px;
+  top: 50%;
+  transform: translateY(-50%) scaleX(-1);
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
   display: flex;
-  gap: 15px;
+  align-items: center;
+  justify-content: center;
+  color: #f1c40f;
+  transition: transform 0.2s ease;
+}
+
+.dark-mode-toggle:hover {
+  transform: translateY(-50%) scaleX(-1) scale(1.1);
+}
+
+.dark-mode-toggle svg {
+  width: 1.1rem;
+  height: 1.1rem;
+}
+
+/* Top Controls */
+.top-controls {
+  display: flex;
+  gap: 12px;
+  width: 100%;
   margin-bottom: 20px;
 }
 
-.control-btn {
-  padding: 10px 20px;
+.top-btn {
+  background-color: var(--btn-brown);
   border: none;
+  padding: 14px 0;
+  font-weight: 600;
+  font-size: 0.85rem;
+  color: #5d4037;
   border-radius: var(--radius-soft);
-  background-color: var(--accent-light);
-  color: var(--accent-color);
-  font-weight: bold;
   cursor: pointer;
-  transition: all 0.2s;
+  text-align: center;
+  transition: transform 0.1s ease, filter 0.1s ease;
 }
 
-.control-btn:hover {
-  filter: brightness(0.9);
+body.dark-mode .top-btn {
+  color: #d7ccc8;
 }
 
+.top-btn:hover {
+  filter: brightness(0.95);
+}
+
+.top-btn:active {
+  transform: translateY(1px);
+}
+
+/* Game Info Bar (Flags, Timer) */
 .game-info {
   display: flex;
-  gap: 30px;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  background-color: transparent;
+  padding: 5px 10px;
   margin-bottom: 20px;
+  box-sizing: border-box;
   font-size: 1.2rem;
   font-weight: bold;
 }
 
+.info-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-primary);
+  min-width: 60px;
+}
+
+.smiley-btn {
+  font-size: 1.5rem;
+  background: none;
+  border: none;
+  cursor: pointer;
+  transition: transform 0.1s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.smiley-btn:active {
+  transform: scale(0.9);
+}
+
+/* Board */
+.board-wrapper {
+  background-color: var(--border-thick);
+  padding: 4px;
+  border-radius: 8px;
+  box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+  margin-bottom: 20px;
+  overflow-x: auto;
+  width: fit-content;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
 .board {
   display: grid;
-  border: 4px solid var(--border-color);
-  border-radius: 8px;
-  background-color: var(--border-color);
-  gap: 1px;
+  gap: 2px;
+  background-color: var(--border-thick);
   user-select: none;
+  width: max-content;
 }
 
 .cell {
-  width: 30px;
-  height: 30px;
+  width: 32px;
+  height: 32px;
   display: flex;
   align-items: center;
   justify-content: center;
   font-weight: bold;
+  font-size: 1.1rem;
   cursor: pointer;
   background-color: var(--hidden-bg);
   transition: background-color 0.1s;
+  box-sizing: border-box;
+  border-radius: 4px;
+}
+
+.cell:hover:not(.revealed) {
+  filter: brightness(0.95);
 }
 
 .cell.revealed {
   background-color: var(--revealed-bg);
   cursor: default;
+  box-shadow: inset 0 0 5px rgba(0,0,0,0.05);
 }
 
 .cell.mine {
   background-color: var(--error-color);
+  color: white;
 }
 
-.cell.flagged::after {
-  content: '🚩';
+.cell.flagged {
+  color: var(--error-color);
+}
+
+/* Modals */
+.modal-overlay {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background-color: rgba(0,0,0,0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  backdrop-filter: blur(2px);
+}
+
+.modal-content {
+  background-color: var(--card-bg);
+  color: var(--text-primary);
+  padding: 25px;
+  border-radius: 20px;
+  width: 320px;
+  text-align: center;
+  box-shadow: 0 15px 35px rgba(0,0,0,0.1);
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.modal-content h3 { 
+  margin-top: 0; 
+  margin-bottom: 20px; 
+}
+
+.modal-btn {
+  width: 100%;
+  padding: 14px;
+  margin-bottom: 12px;
+  border: none;
+  border-radius: 12px;
+  background: var(--bg-color);
+  color: var(--text-primary);
+  font-weight: bold;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.modal-btn:hover {
+  background-color: var(--accent-light);
+  color: var(--accent-color);
+}
+
+/* Pause State */
+.top-btn.paused {
+  background-color: var(--btn-brown-dark);
+}
+
+/* History List Adjustments */
+.history-list {
+  overflow-y: auto;
+  flex-grow: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 5px;
+}
+
+.history-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--bg-color);
+  padding: 12px;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.history-item:hover {
+  background: #f0f0f0;
+}
+
+body.dark-mode .history-item {
+  background: #2c2c2c;
+}
+
+body.dark-mode .history-item:hover {
+  background: #383838;
+}
+
+.history-info {
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+}
+
+.history-main-row {
+  display: flex;
+  gap: 25px;
+  align-items: baseline;
+  margin-bottom: 2px;
+}
+
+.history-status {
+  font-size: 0.8rem;
+  font-weight: bold;
+}
+.history-status.completed { color: #ffa726; }
+.history-status.uncompleted { color: #ff8a80; }
+
+.history-diff {
+  font-size: 0.8rem;
+  font-weight: bold;
+  color: #8d6e63;
+  white-space: nowrap;
+}
+
+.history-type {
   font-size: 1rem;
+  font-weight: bold;
+  color: var(--text-primary);
 }
 
+.history-time {
+  font-size: 0.8rem;
+  color: #888;
+}
+
+.trash-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 5px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.trash-btn svg {
+  stroke: #e74c3c;
+  width: 18px;
+  height: 18px;
+}
+
+.confirm-modal {
+  width: 280px;
+  padding: 30px 20px 20px;
+}
+
+.confirm-footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 15px;
+  margin-top: 20px;
+}
+
+.confirm-btn {
+  flex: 1;
+  padding: 10px;
+  border: none;
+  border-radius: 8px;
+  font-weight: bold;
+  cursor: pointer;
+}
+.confirm-btn.cancel { background: #eee; color: #444; }
+.confirm-btn.confirm { background: #e74c3c; color: white; }
+
+/* Number Colors */
 .cell-1 { color: var(--num-1); }
 .cell-2 { color: var(--num-2); }
 .cell-3 { color: var(--num-3); }
@@ -137,3 +415,10 @@ body.dark-mode {
 .cell-6 { color: var(--num-6); }
 .cell-7 { color: var(--num-7); }
 .cell-8 { color: var(--num-8); }
+
+@media (max-width: 500px) {
+  .board-wrapper {
+    max-width: 100vw;
+    border-radius: 0;
+  }
+}

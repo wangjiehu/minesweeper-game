@@ -1,77 +1,175 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import './styles/Minesweeper.css';
+import Header from './components/Header';
+import MinesweeperBoard from './components/MinesweeperBoard';
+import GameModals from './components/GameModals';
 import { 
   Board, 
   Difficulty, 
   DIFFICULTY_SETTINGS, 
   createEmptyBoard, 
   initializeBoard, 
-  revealCell 
+  revealCell,
+  revealNeighbors
 } from './utils/minesweeper';
 
+export interface GameSession {
+  id: string;
+  board: Board;
+  difficulty: Difficulty;
+  minesLeft: number;
+  timer: number;
+  lastPlayed: number;
+  createdAt: number;
+  gameStatus: 'idle' | 'playing' | 'won' | 'lost';
+}
+
+export type { Difficulty };
+
 function App() {
-  const [difficulty, setDifficulty] = useState<Difficulty>('easy');
   const [board, setBoard] = useState<Board>([]);
-  const [gameState, setGameState] = useState<'idle' | 'playing' | 'won' | 'lost'>('idle');
+  const [difficulty, setDifficulty] = useState<Difficulty>('easy');
+  const [gameStatus, setGameStatus] = useState<'idle' | 'playing' | 'won' | 'lost'>('idle');
   const [minesLeft, setMinesLeft] = useState(0);
   const [timer, setTimer] = useState(0);
+  const [isPaused, setIsPaused] = useState(false);
+  const [isDarkMode, setIsDarkMode] = useState(() => localStorage.getItem('minesweeper_darkmode') === 'true');
+
+  // Multi-session history with localStorage
+  const [gameHistory, setGameHistory] = useState<GameSession[]>(() => {
+    const saved = localStorage.getItem('minesweeper_history');
+    return saved ? JSON.parse(saved) : [];
+  });
+  const [activeGameId, setActiveGameId] = useState<string | null>(null);
+
+  // Modals
+  const [showDiffModal, setShowDiffModal] = useState(false);
+  const [showHistoryModal, setShowHistoryModal] = useState(false);
+  const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [showDeleteOthersConfirm, setShowDeleteOthersConfirm] = useState(false);
+
+  useEffect(() => {
+    document.body.classList.toggle('dark-mode', isDarkMode);
+    localStorage.setItem('minesweeper_darkmode', isDarkMode.toString());
+  }, [isDarkMode]);
+
+  useEffect(() => {
+    localStorage.setItem('minesweeper_history', JSON.stringify(gameHistory));
+  }, [gameHistory]);
 
   const startNewGame = useCallback((diff: Difficulty) => {
     const { rows, cols, mines } = DIFFICULTY_SETTINGS[diff];
-    setBoard(createEmptyBoard(rows, cols));
+    const newBoard = createEmptyBoard(rows, cols);
+    const newId = Date.now().toString();
+
+    setBoard(newBoard);
     setDifficulty(diff);
-    setGameState('idle');
+    setGameStatus('idle');
     setMinesLeft(mines);
     setTimer(0);
+    setIsPaused(false);
+    setShowDiffModal(false);
+
+    const newSession: GameSession = {
+      id: newId,
+      board: newBoard,
+      difficulty: diff,
+      minesLeft: mines,
+      timer: 0,
+      lastPlayed: Date.now(),
+      createdAt: Date.now(),
+      gameStatus: 'idle'
+    };
+    setGameHistory(prev => [newSession, ...prev]);
+    setActiveGameId(newId);
   }, []);
 
+  // Initial load: either resume last game or start new
   useEffect(() => {
-    startNewGame('easy');
-  }, [startNewGame]);
+    if (gameHistory.length > 0 && !activeGameId) {
+      const lastGame = gameHistory[0];
+      setBoard(lastGame.board);
+      setDifficulty(lastGame.difficulty);
+      setMinesLeft(lastGame.minesLeft);
+      setTimer(lastGame.timer);
+      setGameStatus(lastGame.gameStatus);
+      setActiveGameId(lastGame.id);
+    } else if (gameHistory.length === 0) {
+      startNewGame('easy');
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Sync current game to history
+  useEffect(() => {
+    if (!activeGameId) return;
+    setGameHistory(prev => prev.map(game => 
+      game.id === activeGameId 
+        ? { ...game, board, minesLeft, timer, lastPlayed: Date.now(), gameStatus } 
+        : game
+    ));
+  }, [board, minesLeft, timer, gameStatus, activeGameId]);
 
   useEffect(() => {
     let interval: NodeJS.Timeout;
-    if (gameState === 'playing') {
+    if (gameStatus === 'playing' && !isPaused) {
       interval = setInterval(() => setTimer(t => t + 1), 1000);
     }
     return () => clearInterval(interval);
-  }, [gameState]);
+  }, [gameStatus, isPaused]);
 
   const handleCellClick = (r: number, c: number) => {
-    if (gameState === 'won' || gameState === 'lost') return;
+    if (gameStatus === 'won' || gameStatus === 'lost' || isPaused) return;
 
-    if (gameState === 'idle') {
+    if (gameStatus === 'idle') {
       const { rows, cols, mines } = DIFFICULTY_SETTINGS[difficulty];
       const newBoard = initializeBoard(rows, cols, mines, [r, c]);
       setBoard(revealCell(newBoard, r, c));
-      setGameState('playing');
+      setGameStatus('playing');
       return;
     }
 
-    if (board[r][c].isRevealed || board[r][c].isFlagged) return;
+    const cell = board[r][c];
 
-    if (board[r][c].value === 'mine') {
+    if (cell.isFlagged) return;
+
+    // Chording logic (clicking a revealed number)
+    if (cell.isRevealed && typeof cell.value === 'number' && cell.value > 0) {
+      const { newBoard, hitMine } = revealNeighbors(board, r, c);
+      setBoard(newBoard);
+      if (hitMine) {
+        setGameStatus('lost');
+      } else {
+        checkWin(newBoard);
+      }
+      return;
+    }
+
+    if (cell.isRevealed) return;
+
+    if (cell.value === 'mine') {
       const newBoard = board.map(row => row.map(cell => ({ ...cell, isRevealed: cell.value === 'mine' ? true : cell.isRevealed })));
       setBoard(newBoard);
-      setGameState('lost');
+      setGameStatus('lost');
       return;
     }
 
     const newBoard = revealCell(board, r, c);
     setBoard(newBoard);
+    checkWin(newBoard);
+  };
 
-    // Check Win
+  const checkWin = (currentBoard: Board) => {
     const { rows, cols, mines } = DIFFICULTY_SETTINGS[difficulty];
     let revealedCount = 0;
-    newBoard.forEach(row => row.forEach(cell => { if (cell.isRevealed) revealedCount++; }));
+    currentBoard.forEach(row => row.forEach(cell => { if (cell.isRevealed) revealedCount++; }));
     if (revealedCount === rows * cols - mines) {
-      setGameState('won');
+      setGameStatus('won');
     }
   };
 
   const handleContextMenu = (e: React.MouseEvent, r: number, c: number) => {
     e.preventDefault();
-    if (gameState !== 'playing' || board[r][c].isRevealed) return;
+    if (gameStatus !== 'playing' || board[r][c].isRevealed || isPaused) return;
 
     const newBoard = board.map((row, ri) => row.map((cell, ci) => {
       if (ri === r && ci === c) {
@@ -84,64 +182,179 @@ function App() {
     setBoard(newBoard);
   };
 
-  const renderCell = (r: number, c: number) => {
-    const cell = board[r][c];
-    let content = '';
-    let classes = ['cell'];
+  const togglePause = useCallback(() => {
+    if (gameStatus === 'won' || gameStatus === 'lost' || gameStatus === 'idle') return;
+    setIsPaused(prev => !prev);
+  }, [gameStatus]);
 
-    if (cell.isRevealed) {
-      classes.push('revealed');
-      if (cell.value === 'mine') {
-        content = '💣';
-        classes.push('mine');
-      } else if (cell.value !== 0) {
-        content = String(cell.value);
-        classes.push(`cell-${cell.value}`);
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.code === 'Space') {
+        e.preventDefault();
+        togglePause();
       }
-    } else if (cell.isFlagged) {
-      classes.push('flagged');
-    }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [togglePause]);
 
-    return (
-      <div 
-        key={`${r}-${c}`}
-        className={classes.join(' ')}
-        onClick={() => handleCellClick(r, c)}
-        onContextMenu={(e) => handleContextMenu(e, r, c)}
-      >
-        {content}
-      </div>
-    );
+  const loadGame = (session: GameSession) => {
+    setBoard(session.board);
+    setDifficulty(session.difficulty);
+    setMinesLeft(session.minesLeft);
+    setTimer(session.timer);
+    setGameStatus(session.gameStatus);
+    setActiveGameId(session.id);
+    setIsPaused(false);
+    setShowHistoryModal(false);
+  };
+
+  const confirmDelete = (e: React.MouseEvent, id: string) => {
+    e.stopPropagation();
+    setDeleteId(id);
+  };
+
+  const executeDelete = () => {
+    if (!deleteId) return;
+    const updatedHistory = gameHistory.filter(g => g.id !== deleteId);
+    setGameHistory(updatedHistory);
+    
+    if (activeGameId === deleteId) {
+      if (updatedHistory.length > 0) {
+        loadGame(updatedHistory[0]);
+      } else {
+        startNewGame('easy');
+      }
+    }
+    setDeleteId(null);
+  };
+
+  const executeDeleteOthers = () => {
+    if (!activeGameId) return;
+    const activeGame = gameHistory.find(g => g.id === activeGameId);
+    if (activeGame) {
+      setGameHistory([activeGame]);
+    }
+    setShowDeleteOthersConfirm(false);
+  };
+
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
   return (
     <div className="minesweeper-container">
-      <header className="header">
-        <h1>Minesweeper</h1>
-        <div className="signature">WJH</div>
-      </header>
+      <Header 
+        isDarkMode={isDarkMode} 
+        onToggleDarkMode={() => setIsDarkMode(!isDarkMode)} 
+        difficulty={difficulty}
+      />
 
-      <div className="game-controls">
-        <button className="control-btn" onClick={() => startNewGame('easy')}>Easy</button>
-        <button className="control-btn" onClick={() => startNewGame('medium')}>Medium</button>
-        <button className="control-btn" onClick={() => startNewGame('hard')}>Hard</button>
+      {/* Main aligned container */}
+      <div style={{ display: 'flex', flexDirection: 'column', width: 'max-content', maxWidth: '100%' }}>
+        
+        {difficulty === 'easy' ? (
+          <>
+            {/* Top Info Bar for Easy */}
+            <div className="game-info" style={{ 
+              display: 'flex', 
+              justifyContent: 'center', 
+              gap: '80px', 
+              width: '100%', 
+              margin: '0 0 10px 0', 
+              padding: 0 
+            }}>
+              <div className="info-item">
+                <span>🚩</span>
+                <span style={{ width: '40px', display: 'inline-block', textAlign: 'left', fontVariantNumeric: 'tabular-nums' }}>{minesLeft}</span>
+              </div>
+              <div className="info-item">
+                <span>⏱️</span>
+                <span style={{ width: '60px', display: 'inline-block', textAlign: 'left', fontVariantNumeric: 'tabular-nums' }}>{formatTime(timer)}</span>
+              </div>            </div>
+
+            <MinesweeperBoard 
+              board={board}
+              isPaused={isPaused}
+              onCellClick={handleCellClick}
+              onCellContextMenu={handleContextMenu}
+            />
+
+            {/* Bottom Control Bar for Easy - Adjusted Spacing */}
+            <div className="top-controls" style={{ display: 'flex', gap: '10px', width: '100%', margin: '20px 0 0 0' }}>
+              <button className="top-btn btn-history" style={{ flex: 1, margin: 0 }} onClick={() => { setIsPaused(true); setShowHistoryModal(true); }}>
+                History
+              </button>
+              <button className={`top-btn btn-timer ${isPaused ? 'paused' : ''}`} style={{ flex: 1, margin: 0 }} onClick={togglePause}>
+                {isPaused ? 'Start' : 'Pause'}
+              </button>
+              <button className="top-btn" style={{ flex: 1, margin: 0 }} onClick={() => { setIsPaused(true); setShowDiffModal(true); }}>
+                New Game
+              </button>
+            </div>
+          </>
+        ) : (
+          <>
+            {/* Unified Top Bar for Medium/Hard */}
+            <div style={{ display: 'flex', gap: '10px', width: '100%', marginBottom: '20px', alignItems: 'center' }}>
+              <button className="top-btn btn-history" style={{ flex: 1, margin: 0 }} onClick={() => { setIsPaused(true); setShowHistoryModal(true); }}>
+                History
+              </button>
+              <div className="game-info" style={{ 
+                flex: 2, 
+                margin: 0, 
+                display: 'flex', 
+                justifyContent: 'center', 
+                gap: difficulty === 'hard' ? '150px' : '30px', 
+                padding: 0 
+              }}>
+                <div className="info-item">
+                  <span>🚩</span>
+                  <span style={{ width: '40px', display: 'inline-block', textAlign: 'left', fontVariantNumeric: 'tabular-nums' }}>{minesLeft}</span>
+                </div>
+                <div className="info-item">
+                  <span>⏱️</span>
+                  <span style={{ width: '60px', display: 'inline-block', textAlign: 'left', fontVariantNumeric: 'tabular-nums' }}>{formatTime(timer)}</span>
+                </div>              </div>
+              <button className="top-btn" style={{ flex: 1, margin: 0 }} onClick={() => { setIsPaused(true); setShowDiffModal(true); }}>
+                New Game
+              </button>
+            </div>
+
+            <MinesweeperBoard 
+              board={board}
+              isPaused={isPaused}
+              onCellClick={handleCellClick}
+              onCellContextMenu={handleContextMenu}
+            />
+          </>
+        )}
+
       </div>
 
-      <div className="game-info">
-        <span>🚩 {minesLeft}</span>
-        <button className="control-btn" onClick={() => startNewGame(difficulty)}>
-          {gameState === 'won' ? '😎' : gameState === 'lost' ? '😵' : '🙂'}
-        </button>
-        <span>⏱️ {timer}</span>
-      </div>
+      {gameStatus === 'won' && <div style={{marginTop: '20px', color: '#2ecc71', fontWeight: 'bold'}}>Congratulations! You Win!</div>}
 
-      <div className="board" style={{ 
-        gridTemplateColumns: `repeat(${DIFFICULTY_SETTINGS[difficulty].cols}, 30px)` 
-      }}>
-        {board.map((row, r) => row.map((_, c) => renderCell(r, c)))}
-      </div>
-
-      {gameState === 'won' && <h2 style={{color: 'var(--accent-color)'}}>You Win!</h2>}
+      <GameModals 
+        showDiffModal={showDiffModal}
+        showHistoryModal={showHistoryModal}
+        deleteId={deleteId}
+        showDeleteOthersConfirm={showDeleteOthersConfirm}
+        gameHistory={gameHistory}
+        activeGameId={activeGameId}
+        onStartNewGame={startNewGame}
+        onLoadGame={loadGame}
+        onConfirmDelete={confirmDelete}
+        onExecuteDelete={executeDelete}
+        onExecuteDeleteOthers={executeDeleteOthers}
+        setShowDiffModal={setShowDiffModal}
+        setShowHistoryModal={setShowHistoryModal}
+        setDeleteId={setDeleteId}
+        setShowDeleteOthersConfirm={setShowDeleteOthersConfirm}
+        setIsPaused={setIsPaused}
+        formatTime={formatTime}
+      />
     </div>
   );
 }

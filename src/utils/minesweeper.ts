@@ -28,18 +28,33 @@ export const createEmptyBoard = (rows: number, cols: number): Board => {
 
 export const initializeBoard = (rows: number, cols: number, mines: number, firstClick: [number, number]): Board => {
   const board = createEmptyBoard(rows, cols);
-  let minesPlaced = 0;
-
-  // Place mines
-  while (minesPlaced < mines) {
-    const r = Math.floor(Math.random() * rows);
-    const c = Math.floor(Math.random() * cols);
-
-    // Don't place mine on first click or already placed mine
-    if (board[r][c].value !== 'mine' && (Math.abs(r - firstClick[0]) > 1 || Math.abs(c - firstClick[1]) > 1)) {
-      board[r][c].value = 'mine';
-      minesPlaced++;
+  
+  // Fisher-Yates Shuffle for optimal mine placement
+  const totalCells = rows * cols;
+  const availableIndices: number[] = [];
+  
+  for (let i = 0; i < totalCells; i++) {
+    const r = Math.floor(i / cols);
+    const c = i % cols;
+    // Exclude first click and its immediate 8 neighbors to guarantee a safe start
+    if (Math.abs(r - firstClick[0]) <= 1 && Math.abs(c - firstClick[1]) <= 1) {
+      continue;
     }
+    availableIndices.push(i);
+  }
+
+  // Shuffle the first 'mines' elements
+  for (let i = 0; i < mines; i++) {
+    const j = i + Math.floor(Math.random() * (availableIndices.length - i));
+    const temp = availableIndices[i];
+    availableIndices[i] = availableIndices[j];
+    availableIndices[j] = temp;
+    
+    // Place mine
+    const mineIndex = availableIndices[i];
+    const r = Math.floor(mineIndex / cols);
+    const c = mineIndex % cols;
+    board[r][c].value = 'mine';
   }
 
   // Calculate numbers
@@ -64,33 +79,82 @@ export const initializeBoard = (rows: number, cols: number, mines: number, first
   return board;
 };
 
-export const revealCell = (board: Board, r: number, c: number): Board => {
-  if (board[r][c].isRevealed || board[r][c].isFlagged) return board;
+// Mutable helper to prevent O(N) memory allocations per cascade step
+const revealCellMutable = (board: Board, startR: number, startC: number): void => {
+  if (board[startR][startC].isRevealed || board[startR][startC].isFlagged) return;
 
-  const newBoard = board.map(row => row.map(cell => ({ ...cell })));
   const rows = board.length;
   const cols = board[0].length;
-
-  const stack: [number, number][] = [[r, c]];
+  const stack: [number, number][] = [[startR, startC]];
 
   while (stack.length > 0) {
     const [currR, currC] = stack.pop()!;
-    if (newBoard[currR][currC].isRevealed) continue;
+    if (board[currR][currC].isRevealed || board[currR][currC].isFlagged) continue;
 
-    newBoard[currR][currC].isRevealed = true;
+    board[currR][currC].isRevealed = true;
 
-    if (newBoard[currR][currC].value === 0) {
+    if (board[currR][currC].value === 0) {
       for (let dr = -1; dr <= 1; dr++) {
         for (let dc = -1; dc <= 1; dc++) {
           const nr = currR + dr;
           const nc = currC + dc;
-          if (nr >= 0 && nr < rows && nc >= 0 && nc < cols && !newBoard[nr][nc].isRevealed) {
+          if (nr >= 0 && nr < rows && nc >= 0 && nc < cols && !board[nr][nc].isRevealed && !board[nr][nc].isFlagged) {
             stack.push([nr, nc]);
           }
         }
       }
     }
   }
+};
 
+export const revealCell = (board: Board, r: number, c: number): Board => {
+  const newBoard = board.map(row => row.map(cell => ({ ...cell })));
+  revealCellMutable(newBoard, r, c);
   return newBoard;
+};
+
+export const revealNeighbors = (board: Board, r: number, c: number): { newBoard: Board, hitMine: boolean } => {
+  const cell = board[r][c];
+  if (!cell.isRevealed || cell.value === 'mine' || cell.value === 0 || typeof cell.value !== 'number') {
+    return { newBoard: board, hitMine: false };
+  }
+
+  const rows = board.length;
+  const cols = board[0].length;
+  let flagCount = 0;
+
+  // Count surrounding flags
+  for (let dr = -1; dr <= 1; dr++) {
+    for (let dc = -1; dc <= 1; dc++) {
+      const nr = r + dr;
+      const nc = c + dc;
+      if (nr >= 0 && nr < rows && nc >= 0 && nc < cols && board[nr][nc].isFlagged) {
+        flagCount++;
+      }
+    }
+  }
+
+  // If flags match the number, reveal the rest efficiently
+  if (flagCount === cell.value) {
+    const newBoard = board.map(row => row.map(c => ({ ...c })));
+    let hitMine = false;
+
+    for (let dr = -1; dr <= 1; dr++) {
+      for (let dc = -1; dc <= 1; dc++) {
+        const nr = r + dr;
+        const nc = c + dc;
+        if (nr >= 0 && nr < rows && nc >= 0 && nc < cols && !newBoard[nr][nc].isRevealed && !newBoard[nr][nc].isFlagged) {
+          if (newBoard[nr][nc].value === 'mine') {
+            hitMine = true;
+            newBoard[nr][nc].isRevealed = true;
+          } else {
+            revealCellMutable(newBoard, nr, nc);
+          }
+        }
+      }
+    }
+    return { newBoard, hitMine };
+  }
+
+  return { newBoard: board, hitMine: false };
 };
